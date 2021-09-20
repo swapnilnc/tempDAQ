@@ -10,8 +10,9 @@ import sys
 import csv
 import time
 import json
-from PyQt5.QtWidgets import QWidget, QProgressBar, QPushButton, QApplication, QLabel
+from PyQt5.QtWidgets import QWidget, QProgressBar, QPushButton, QApplication, QLabel, QMdiArea
 from PyQt5.QtCore import QBasicTimer, Qt
+from PyQt5.QtGui import QIcon
 
 global numDevices
 global valuesStr
@@ -227,7 +228,28 @@ def getScreenSize():
     return screensize
 
 
-class ProgressBar(QWidget):
+class AppDemo(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.resize(1920, 1080)
+        global numDevices
+        workspace = QMdiArea(self)
+        # workspace.resize(self.rect().width(), self.rect().height())
+
+        self.tempWidget = ProgressBarWidget()
+        workspace.addSubWindow(self.tempWidget)
+        # self.setGeometry(500, 500, (60 + self.leads * 60), 500)
+        # self.tempWidget.showMaximized()
+        self.tempWidget.setGeometry(500, 500, (60 + numDevices[0] * 8 * 60), 500)
+        # self.button = QPushButton('My Button')
+        # self.button.clicked.connect(lambda: print('button is clicked'))
+        # workspace.addSubWindow(self.button)
+
+        # textEditor = QTextEdit()
+        # workspace.addSubWindow(textEditor)
+
+
+class ProgressBarWidget(QWidget):
     global numDevices
     global valueList
     global chNames
@@ -235,6 +257,9 @@ class ProgressBar(QWidget):
     def __init__(self):
         super().__init__()
         self.leads = numDevices[0] * 8
+        self.setWindowTitle('Temperature Data')
+        self.setWindowIcon(QIcon('daqicon.png'))
+        self.sizeHint()
         self.progressBar = [QProgressBar(self) for i in range(self.leads)]
         self.valLabels = [QLabel(self) for i in range(self.leads)]
         self.leadNames = [QLabel(self) for i in range(self.leads)]
@@ -286,9 +311,10 @@ class ProgressBar(QWidget):
 
 def runGUI():
     app = QApplication(sys.argv)
-    widget = ProgressBar()
-    widget.show()
-    # widget.setValue()
+    window = AppDemo()
+    window.setWindowIcon(QIcon('daqicon2.png'))
+    window.setWindowTitle('Data Acquisition')
+    window.show()
     sys.exit(app.exec_())
 
 

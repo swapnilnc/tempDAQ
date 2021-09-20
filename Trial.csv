@@ -1,0 +1,10 @@
+Python csv Generation Trial
+Worksheet name: 1 DAQ CPU 15min x 0 V x 0 C
+"Recording date: 2021-09-20, 11:25:16"
+Block length: 1
+Delta: 0.5min
+"Number of channel:8x1 Temp, Current, Voltage"
+> 1045
+> 1045
+Date,Time,LED Tc,DRV,HS Top,Ple Amb,Lab Amb,N/A,N/A,N/A,Voltage,Current
+2021-09-20,11:25:46,21.222,21.499,26.418,21.382,26.371,25.589,23.028,27.203,0.,0.

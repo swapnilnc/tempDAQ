@@ -10,8 +10,8 @@ import sys
 import csv
 import time
 import json
-from PyQt5.QtWidgets import QWidget, QProgressBar, QPushButton, QApplication, QLabel, QMdiArea
-from PyQt5.QtCore import QBasicTimer, Qt
+from PyQt5.QtWidgets import QWidget, QProgressBar, QPushButton, QApplication, QLabel, QMdiArea, QGroupBox
+from PyQt5.QtCore import QBasicTimer, Qt, QRect
 from PyQt5.QtGui import QIcon
 
 global numDevices
@@ -231,16 +231,23 @@ def getScreenSize():
 class AppDemo(QWidget):
     def __init__(self):
         super().__init__()
-        self.resize(1920, 1080)
         global numDevices
+        global valueList
+        self.resize(1920, 1080)
         workspace = QMdiArea(self)
-        # workspace.resize(self.rect().width(), self.rect().height())
+        workspace.resize(self.rect().width(), self.rect().height())
 
         self.tempWidget = ProgressBarWidget()
         workspace.addSubWindow(self.tempWidget)
+        self.displayVIWidget = diaplayVI(valueList[-2:])
+        workspace.addSubWindow(self.displayVIWidget)
+        self.tempWidget.setWindowState(Qt.WindowActive)
+        self.tempWidget.setGeometry(20, 20, (60 + numDevices[0] * 8 * 60), 500)
+        print(self.tempWidget.sizeHint())
+
         # self.setGeometry(500, 500, (60 + self.leads * 60), 500)
         # self.tempWidget.showMaximized()
-        self.tempWidget.setGeometry(500, 500, (60 + numDevices[0] * 8 * 60), 500)
+        # self.tempWidget.setGeometry(500, 500, (60 + numDevices[0] * 8 * 60), 500)
         # self.button = QPushButton('My Button')
         # self.button.clicked.connect(lambda: print('button is clicked'))
         # workspace.addSubWindow(self.button)
@@ -257,9 +264,13 @@ class ProgressBarWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.leads = numDevices[0] * 8
+        self.isMaximized()
+        # self.resize((60 + self.leads * 60), 500)
+        # self.resize(self.rect().width(), self.rect().height())
         self.setWindowTitle('Temperature Data')
         self.setWindowIcon(QIcon('daqicon.png'))
-        self.sizeHint()
+        self.setEnabled(True)
+        self.setWindowState(Qt.WindowNoState)
         self.progressBar = [QProgressBar(self) for i in range(self.leads)]
         self.valLabels = [QLabel(self) for i in range(self.leads)]
         self.leadNames = [QLabel(self) for i in range(self.leads)]
@@ -307,6 +318,31 @@ class ProgressBarWidget(QWidget):
     #     else:
     #         self.step = 1
     #         self.step += 1
+
+
+class diaplayVI(QWidget):
+    def __init__(self, value):
+        super().__init__()
+        self.setWindowTitle('Current and Voltage')
+        self.groupBoxCur = QGroupBox(self)
+        self.groupBoxCur.setContextMenuPolicy(Qt.DefaultContextMenu)
+        self.groupBoxCur.setTitle("Current")
+        self.groupBoxCur.setGeometry(QRect(10, 10, 200, 200))
+        self.groupBoxVol = QGroupBox(self)
+        self.groupBoxVol.setContextMenuPolicy(Qt.DefaultContextMenu)
+        self.groupBoxVol.setTitle('Voltage')
+        self.groupBoxVol.setGeometry(QRect(220, 10, 200, 200))
+        print(value)
+        self.labelCur = QLabel(self.groupBoxCur)
+        self.labelCur.setGeometry(QRect(10, 10, 180, 180))
+        self.labelCur.setText(str(value[0]))
+        self.labelCur.setAlignment(Qt.AlignCenter)
+        self.labelVol = QLabel(self.groupBoxVol)
+        self.labelVol.setGeometry(QRect(10, 10, 180, 180))
+        self.labelVol.setText(str(value[1]))
+        self.labelVol.setAlignment(Qt.AlignCenter)
+
+
 
 
 def runGUI():

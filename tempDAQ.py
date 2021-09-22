@@ -1,8 +1,12 @@
-from threading import Thread, Lock
-# from multiprocessing import Process
+import multiprocessing
+import threading
+from threading import Thread
+from multiprocessing import Process
+from multiprocessing.sharedctypes import Value, Array
 from mcculw import ul
 from mcculw.enums import TempScale
 from mcculw.enums import InterfaceType
+from ctypes import c_ubyte
 import numpy as np
 import serial
 import pydmm.pydmm as pd
@@ -10,9 +14,11 @@ import sys
 import csv
 import time
 import json
-from PyQt5.QtWidgets import QWidget, QProgressBar, QPushButton, QApplication, QLabel, QMdiArea, QGroupBox
-from PyQt5.QtCore import QBasicTimer, Qt, QRect
-from PyQt5.QtGui import QIcon
+# from PyQt5.QtWidgets import QWidget, QProgressBar, QPushButton, QApplication, QLabel, QMdiArea, QGroupBox, QAction, \
+#     QMainWindow
+# from PyQt5.QtCore import QBasicTimer, Qt, QRect
+# from PyQt5.QtGui import QIcon
+import displayGUI
 
 global numDevices
 global valuesStr
@@ -22,6 +28,10 @@ global chNames
 global chLimits
 global timeInterval
 global runDuration
+global qNumDevices
+global qchNames
+global qValueList
+global sharedList
 
 
 def initialize():
@@ -34,9 +44,12 @@ def initialize():
     global chLimits
     global timeInterval
     global runDuration
+    global qchNames
+
     numDevices = data['numDevices']
     testNum = data['TestNum']
     chNames = data["chNames"]
+    qchNames = chNames
     chLimits = data["chLimits"]
     timeInterval = data["timeInterval"]
     runDuration = data['runDuration']
@@ -46,10 +59,18 @@ def initialize():
 
 def initTempDAQ():
     global numDevices
+    global sharedList
     ul.ignore_instacal()
     devices = ul.get_daq_device_inventory(InterfaceType.ANY)
     # Connected device List
     numDevices[0] = len(devices)
+    # qValueList = Array(c_ubyte, (["0.0"]*(numDevices[0]*8+2)), lock=lock)
+    sharedList = []
+    for i in range(numDevices[0]*8+2):
+        sharedList.append("0.0")
+    print(sharedList)
+    global qNumDevices
+    qNumDevices = numDevices
     i = 1
     for device in devices:
         ul.create_daq_device(i, device)
@@ -130,10 +151,13 @@ def writeGlobal(v=False, c=False):
     timer.join()
     global valuesStr
     global valueList
+    global sharedList
     mutex.acquire()
     valuesStr = temp
     stringList = valuesStr.split(',')
     valueList = [float(x) for x in stringList]
+    for i in range(len(stringList)):
+        sharedList[i] = stringList[i]
     mutex.release()
     end = time.time()
     print(valuesStr, end - start, valueList)
@@ -143,6 +167,7 @@ def writeGlobal(v=False, c=False):
 def initCSV():
     with open('Trial.csv', 'w', newline='') as file:
         global chNames
+        global qchNames
         writer = csv.writer(file)
         dateNow = time.strftime('%Y-%m-%d', time.localtime())  # '2021-05-14'
         timeNow = time.strftime('%H:%M:%S', time.localtime())  # '12:06:16'
@@ -168,6 +193,7 @@ def initCSV():
         else:
             writer.writerow(["Date", "Time"] + strList + ["Voltage", "Current"])
             chNames = strList
+        qchNames = chNames
         file.close()
 
 
@@ -228,131 +254,147 @@ def getScreenSize():
     return screensize
 
 
-class AppDemo(QWidget):
-    def __init__(self):
-        super().__init__()
-        global numDevices
-        global valueList
-        self.resize(1920, 1080)
-        workspace = QMdiArea(self)
-        workspace.resize(self.rect().width(), self.rect().height())
-
-        self.tempWidget = ProgressBarWidget()
-        workspace.addSubWindow(self.tempWidget)
-        self.displayVIWidget = diaplayVI(valueList[-2:])
-        workspace.addSubWindow(self.displayVIWidget)
-        self.tempWidget.setWindowState(Qt.WindowActive)
-        self.tempWidget.setGeometry(20, 20, (60 + numDevices[0] * 8 * 60), 500)
-        print(self.tempWidget.sizeHint())
-
-        # self.setGeometry(500, 500, (60 + self.leads * 60), 500)
-        # self.tempWidget.showMaximized()
-        # self.tempWidget.setGeometry(500, 500, (60 + numDevices[0] * 8 * 60), 500)
-        # self.button = QPushButton('My Button')
-        # self.button.clicked.connect(lambda: print('button is clicked'))
-        # workspace.addSubWindow(self.button)
-
-        # textEditor = QTextEdit()
-        # workspace.addSubWindow(textEditor)
-
-
-class ProgressBarWidget(QWidget):
-    global numDevices
-    global valueList
-    global chNames
-
-    def __init__(self):
-        super().__init__()
-        self.leads = numDevices[0] * 8
-        self.isMaximized()
-        # self.resize((60 + self.leads * 60), 500)
-        # self.resize(self.rect().width(), self.rect().height())
-        self.setWindowTitle('Temperature Data')
-        self.setWindowIcon(QIcon('daqicon.png'))
-        self.setEnabled(True)
-        self.setWindowState(Qt.WindowNoState)
-        self.progressBar = [QProgressBar(self) for i in range(self.leads)]
-        self.valLabels = [QLabel(self) for i in range(self.leads)]
-        self.leadNames = [QLabel(self) for i in range(self.leads)]
-        for i in range(numDevices[0] * 8):
-            self.leadNames[i].setGeometry((20 + i * 60), 5, 50, 25)
-            self.leadNames[i].setAlignment(Qt.AlignCenter)
-            self.leadNames[i].setText(chNames[i])
-        for i in range(numDevices[0] * 8):
-            self.progressBar[i].setGeometry((30 + i * 60), 30, 30, 200)
-            self.valLabels[i].setGeometry((25 + i * 60), 233, 40, 25)
-            self.valLabels[i].setAlignment(Qt.AlignCenter)
-            self.progressBar[i].setOrientation(Qt.Vertical)
-            self.progressBar[i].setMaximum(150)
-
-        # timeSec = 5
-        self.btnStart = QPushButton('Start', self)
-        self.btnStart.move(30, 280)
-        self.btnStart.clicked.connect(self.startProgress)
-
-        # self.timer = QBasicTimer()
-        # self.step = 1
-
-    def startProgress(self):
-
-        for i in range(len(valueList) - 2):
-            value = valueList[i]
-            self.valLabels[i].setText(str(value))
-            if value <= 150:
-                self.progressBar[i].setValue(int(value))
-            else:
-                value = 0
-                self.progressBar[i].setValue(value)
-
-    # def timerEvent(self, event):
-    #     print('started')
-    #     global valuesStr
-    #     valuesList = valuesStr.split(',')
-    #     print(valuesList)
-    #     self.progressBar[0].setValue(valuesList[0])
-    #     # for i in range(numDevices[0] * 8):
-    #     #     # self.progressBar[i].setValue(valuesList[i])
-    #     #     self.progressBar[i].setValue(self.step)
-    #     if self.step <= 2147483639:
-    #         self.step += 1
-    #     else:
-    #         self.step = 1
-    #         self.step += 1
-
-
-class diaplayVI(QWidget):
-    def __init__(self, value):
-        super().__init__()
-        self.setWindowTitle('Current and Voltage')
-        self.groupBoxCur = QGroupBox(self)
-        self.groupBoxCur.setContextMenuPolicy(Qt.DefaultContextMenu)
-        self.groupBoxCur.setTitle("Current")
-        self.groupBoxCur.setGeometry(QRect(10, 10, 200, 200))
-        self.groupBoxVol = QGroupBox(self)
-        self.groupBoxVol.setContextMenuPolicy(Qt.DefaultContextMenu)
-        self.groupBoxVol.setTitle('Voltage')
-        self.groupBoxVol.setGeometry(QRect(220, 10, 200, 200))
-        print(value)
-        self.labelCur = QLabel(self.groupBoxCur)
-        self.labelCur.setGeometry(QRect(10, 10, 180, 180))
-        self.labelCur.setText(str(value[0]))
-        self.labelCur.setAlignment(Qt.AlignCenter)
-        self.labelVol = QLabel(self.groupBoxVol)
-        self.labelVol.setGeometry(QRect(10, 10, 180, 180))
-        self.labelVol.setText(str(value[1]))
-        self.labelVol.setAlignment(Qt.AlignCenter)
-
-
-
-
-def runGUI():
-    app = QApplication(sys.argv)
-    window = AppDemo()
-    window.setWindowIcon(QIcon('daqicon2.png'))
-    window.setWindowTitle('Data Acquisition')
-    window.show()
-    sys.exit(app.exec_())
-
+# class AppDemo(QMainWindow, qValueList, qchNames, qNumDevices):
+#     def __init__(self):
+#         super().__init__()
+#         global numDevices
+#         global valueList
+#         self.resize(1920, 1080)
+#         workspace = QMdiArea(self)
+#         workspace.resize(self.rect().width(), self.rect().height())
+#
+#         self.tempWidget = ProgressBarWidget()
+#         workspace.addSubWindow(self.tempWidget)
+#         self.tempWidget.adjustSize()
+#         self.displayVIWidget = displayVIWidget()
+#         workspace.addSubWindow(self.displayVIWidget)
+#         self.tempWidget.setWindowState(Qt.WindowActive)
+#         self.tempWidget.setGeometry(20, 20, (60 + numDevices[0] * 8 * 60), 500)
+#         self.menuBar = self.menuBar()
+#         fileMenu = self.menuBar.addMenu('File')
+#         startDisplay = QAction('Start', self)
+#         startDisplay.setShortcut('Ctrl+Q')
+#         startDisplay.triggered.connect(lambda: self.setValue())
+#         fileMenu.addAction(startDisplay)
+#
+#     def setValue(self):
+#         while True:
+#             global valueList
+#             timer = Thread(target=timeIntervalFunction(3), args=())
+#             timer.start()
+#             self.displayVIWidget.setValue(valueList[-2:])
+#             self.tempWidget.setValue(valueList[:-2])
+#             print(self.tempWidget.sizeHint())
+#             timer.join()
+#         # self.setGeometry(500, 500, (60 + self.leads * 60), 500)
+#         # self.tempWidget.showMaximized()
+#         # self.tempWidget.setGeometry(500, 500, (60 + numDevices[0] * 8 * 60), 500)
+#         # self.button = QPushButton('My Button')
+#         # self.button.clicked.connect(lambda: print('button is clicked'))
+#         # workspace.addSubWindow(self.button)
+#
+#         # textEditor = QTextEdit()
+#         # workspace.addSubWindow(textEditor)
+#
+#
+# class ProgressBarWidget(QWidget):
+#     global numDevices
+#     global valueList
+#     global chNames
+#
+#     def __init__(self):
+#         super().__init__()
+#         self.leads = numDevices[0] * 8
+#         # self.isMaximized()
+#         # self.resize((60 + self.leads * 60), 500)
+#         # self.resize(self.rect().width(), self.rect().height())
+#         self.setWindowTitle('Temperature Data')
+#         self.setWindowIcon(QIcon('daqicon.png'))
+#         self.setEnabled(True)
+#         self.setWindowState(Qt.WindowNoState)
+#         self.progressBar = [QProgressBar(self) for i in range(self.leads)]
+#         self.valLabels = [QLabel(self) for i in range(self.leads)]
+#         self.leadNames = [QLabel(self) for i in range(self.leads)]
+#         for i in range(numDevices[0] * 8):
+#             self.leadNames[i].setGeometry((20 + i * 60), 5, 50, 25)
+#             self.leadNames[i].setAlignment(Qt.AlignCenter)
+#             self.leadNames[i].setText(chNames[i])
+#         for i in range(numDevices[0] * 8):
+#             self.progressBar[i].setGeometry((30 + i * 60), 30, 30, 200)
+#             self.valLabels[i].setGeometry((25 + i * 60), 233, 40, 25)
+#             self.valLabels[i].setAlignment(Qt.AlignCenter)
+#             self.progressBar[i].setOrientation(Qt.Vertical)
+#             self.progressBar[i].setMaximum(150)
+#         # timeSec = 5
+#         #     self.btnStart = QPushButton('Start', self)
+#         #     self.btnStart.move(30, 280)
+#         #     self.btnStart.clicked.connect(super)
+#         # self.timer = QBasicTimer()
+#         # self.step = 1
+#
+#     def setValue(self, valueFloatList):
+#
+#         for i in range(len(valueFloatList)):
+#             value = valueFloatList[i]
+#             self.valLabels[i].setText(str(value))
+#             if value <= 150:
+#                 self.progressBar[i].setValue(int(value))
+#             else:
+#                 value = 0
+#                 self.progressBar[i].setValue(value)
+#
+#     # def timerEvent(self, event):
+#     #     print('started')
+#     #     global valuesStr
+#     #     valuesList = valuesStr.split(',')
+#     #     print(valuesList)
+#     #     self.progressBar[0].setValue(valuesList[0])
+#     #     # for i in range(numDevices[0] * 8):
+#     #     #     # self.progressBar[i].setValue(valuesList[i])
+#     #     #     self.progressBar[i].setValue(self.step)
+#     #     if self.step <= 2147483639:
+#     #         self.step += 1
+#     #     else:
+#     #         self.step = 1
+#     #         self.step += 1
+#
+#
+# class displayVIWidget(QWidget):
+#     def __init__(self):
+#         super().__init__()
+#         self.setWindowTitle('Current and Voltage')
+#         self.setWindowIcon(QIcon('daqicon.png'))
+#         self.groupBoxCur = QGroupBox(self)
+#         self.groupBoxCur.setContextMenuPolicy(Qt.DefaultContextMenu)
+#         self.groupBoxCur.setTitle("Current")
+#         self.groupBoxCur.setGeometry(QRect(10, 10, 200, 200))
+#         self.groupBoxVol = QGroupBox(self)
+#         self.groupBoxVol.setContextMenuPolicy(Qt.DefaultContextMenu)
+#         self.groupBoxVol.setTitle('Voltage')
+#         self.groupBoxVol.setGeometry(QRect(220, 10, 200, 200))
+#         # print(value)
+#         self.labelCur = QLabel(self.groupBoxCur)
+#         self.labelCur.setGeometry(QRect(10, 10, 180, 180))
+#         # self.labelCur.setText(str(value[0]))
+#         self.labelCur.setAlignment(Qt.AlignCenter)
+#         self.labelVol = QLabel(self.groupBoxVol)
+#         self.labelVol.setGeometry(QRect(10, 10, 180, 180))
+#         # self.labelVol.setText(str(value[1]))
+#         self.labelVol.setAlignment(Qt.AlignCenter)
+#
+#     def setValue(self, value):
+#         print(value)
+#         self.labelCur.setText(str(value[0]))
+#         self.labelVol.setText(str(value[1]))
+#
+#
+# def runGUI(qValueList, qchNames, qNumDevices):
+#     app = QApplication(sys.argv)
+#     window = AppDemo(qValueList, qchNames, qNumDevices)
+#     window.setWindowIcon(QIcon('daqicon2.png'))
+#     window.setWindowTitle('Data Acquisition')
+#     window.show()
+#     sys.exit(app.exec_())
 
 # def process1():
 #     t1 = Thread(target=writeGlobal, args=(v, c), daemon=True)
@@ -366,17 +408,22 @@ def runGUI():
 #     t3.start()
 
 
+
+
 if __name__ == '__main__':
+    lock = multiprocessing.Lock()
+    mutex = threading.Lock()
+    manager = multiprocessing.Manager()
+    sharedList = manager.list()
     initialize()
     v = False
     c = False
-    mutex = Lock()
     t1 = Thread(target=writeGlobal, args=(v, c), daemon=True)
     t1.start()
     t2 = Thread(target=appendCSV, args=(), daemon=True)
     t2.start()
     time.sleep(10)
-    t3 = Thread(target=runGUI, args=(), daemon=True)
+    t3 = Process(target=displayGUI.runGUI, args=(sharedList, qchNames, qNumDevices), daemon=True)
     t3.start()
     # t3 = Thread(target=checkLimit, args=(), daemon=True)
     # t3.start()

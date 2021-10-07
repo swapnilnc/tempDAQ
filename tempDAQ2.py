@@ -20,7 +20,7 @@ import tempfile
 #     QMainWindow
 # from PyQt5.QtCore import QBasicTimer, Qt, QRect
 # from PyQt5.QtGui import QIcon
-import displayGUI2
+import runGUI
 
 global numDevices
 
@@ -36,14 +36,24 @@ def initTempDAQ():
     # If number of devices is different replace new number
     with open('test.json', 'r') as infile:
         data = json.load(infile)
+        print(data)
         numDevices = data['numDevices']
+        chLimits = data['chLimits']
+        infile.seek(0)
         infile.close()
     # Connected device List
     if numDevices[0] != len(devices):
+        extra = len(devices) - numDevices[0]
+        print('dasdasda', extra)
+        extraLimits = 150
+        for i in range(extra*8):
+            chLimits.append(extraLimits)
         numDevices[0] = len(devices)
+        data['numDevices'] = numDevices
+        data['chLimits'] = chLimits
+        print(data)
         with open('test.json', 'w') as outfile:
-            data = json.load(outfile)
-            data['numDevices'] = numDevices
+            json.dump(data, outfile)
             outfile.close()
     i = 1
     for device in devices:
@@ -87,9 +97,9 @@ def initCSV():
         else:
             writer.writerow(["Date", "Time"] + strList + ["Voltage", "Current"])
             chNames = strList
+            data["chNames"] = chNames
             with open('test.json', 'w') as outfile:
-                data = json.load(outfile)
-                data["chNames"] = chNames
+                json.dump(data, outfile)
                 outfile.close()
         file.close()
 
@@ -219,7 +229,7 @@ if __name__ == '__main__':
     t2 = Thread(target=appendCSV, args=[dir], daemon=True)
     t2.start()
     time.sleep(10)
-    t3 = Process(target=displayGUI2.runGUI, args=([dir]), daemon=True)
+    t3 = Process(target=runGUI.runGUI, args=([dir]), daemon=True)
     t3.start()
     print(numDevices[0])
     print('main sleeping')

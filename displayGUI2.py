@@ -18,9 +18,8 @@ class ResultObj(QObject):
     def __init__(self, val):
         self.val = val
 
-    # Step 1: Create a worker class
 
-
+# Step 1: Create a worker class
 class Worker(QObject):
     finished = pyqtSignal(object)
     progress = pyqtSignal()
@@ -38,43 +37,41 @@ class Worker(QObject):
             valueList = readTemp.read()
             readTemp.close()
         valueList = valueList.replace(' ', '')
-        valueList.split(',')
+        valueList = valueList.split(',')
         print('blah', valueList, type(valueList[0]))
         self.finished.emit(ResultObj(valueList))
 
 
 class AppDemo(QWidget):
     def __init__(self, dir):
-        self.dir = dir
         super().__init__()
+        self.dir = dir
         self.resize(1920, 1080)
-        # workspace = QMdiArea(self)
         workspace = QVBoxLayout()
         # workspace.resize(self.rect().width(), self.rect().height())
+        # Creating object for Temp Display
         self.tempWidget = ProgressBarWidget()
-        # workspace.addWidget(self.tempWidget)
         workspace.addWidget(self.tempWidget)
-        # self.tempWidget.adjustSize()
+        # Creating object for Voltage Current Display
         self.displayVIWidget = displayVIWidget()
-        # workspace.addWidget(self.displayVIWidget)
         workspace.addWidget(self.displayVIWidget)
+        # Button to start process
         buttonStart = QPushButton("Start")
         workspace.addWidget(buttonStart)
         buttonStart.clicked.connect(self.iterateProcess)
-        print('reachefd heter')
+        # Step 2: Creating a thread object
         self.thread = QThread()
         # Step 3: Create a worker object
         self.worker = Worker(self.dir, self.reportProgress)
-        # Step 4: Move worker to the thread
-        self.worker.moveToThread(self.thread)
         self.setLayout(workspace)
         print(self.children())
 
     def iterateProcess(self):
-
+        # Step 4: Move worker to the thread
+        self.worker.moveToThread(self.thread)
         print("entered here")
         # Step 5: Connect signals and slots
-        self.thread.started.connect(self.worker.run)
+        self.thread.started.connect(self.worker.run())
         # self.worker.finished.connect(self.thread.quit)
         # self.worker.finished.connect(callback, self.worker.quit)
         # self.worker.progress.connect(self.reportProgress)
@@ -82,25 +79,14 @@ class AppDemo(QWidget):
         self.thread.finished.connect(self.thread.deleteLater)
         # fileMenu.addAction(startDisplay)
 
-    # def test(self, valueList):
-    #     while True:
-    #         timer = Thread(target=timeIntervalFunction(3), args=())
-    #         timer.start()
-    #         print(valueList[:])
-    #         timer.join()
-    #
-    # def setValue(self, valueList):
-    #     while True:
-    #         timer = Thread(target=timeIntervalFunction(3), args=())
-    #         timer.start()
-    #         self.displayVIWidget.setValue(valueList[-2:])
-    #         self.tempWidget.setValue(valueList[:-2])
-    #         timer = Thread(target=timeIntervalFunction(3), args=())
-    #         timer.start()
-    #         timer.join()
-    def reportProgress(self, valueList):
-        self.displayVIWidget.setValue(valueList[-2:])
-        self.tempWidget.setValue(valueList[:-2])
+    # The QThread connects here and reportProgress updates the display
+    def reportProgress(self, result):
+        val = result.val
+        print('reported!!', val)
+        print(val[-2:])
+        print(val[:-2])
+        self.displayVIWidget.setValue(val[-2:])
+        self.tempWidget.setValue(val[:-2])
         print('reported values!')
 
 
@@ -116,13 +102,10 @@ class ProgressBarWidget(QWidget):
         print('in progressbar widget read data')
         self.leads = numDevices[0] * 8
         self.resize(1920, 500)
-        # self.isMaximized()
         # self.resize((60 + self.leads * 60), 500)
         self.resize(self.rect().width(), self.rect().height())
         # self.setWindowTitle('Temperature Data')
         # self.setWindowIcon(QIcon('daqicon.png'))
-        # self.setEnabled(True)
-        # self.setWindowState(Qt.WindowNoState)
         self.progressBar = [QProgressBar(self) for i in range(self.leads)]
         self.valLabels = [QLabel(self) for i in range(self.leads)]
         self.leadNames = [QLabel(self) for i in range(self.leads)]
@@ -134,14 +117,25 @@ class ProgressBarWidget(QWidget):
             self.progressBar[i].setGeometry((30 + i * 60), 30, 30, 200)
             self.valLabels[i].setGeometry((25 + i * 60), 233, 40, 25)
             self.valLabels[i].setAlignment(Qt.AlignCenter)
+            self.valLabels[i].setText('0.0')
             self.progressBar[i].setOrientation(Qt.Vertical)
             self.progressBar[i].setMaximum(150)
+            self.progressBar[i].setValue(25)
 
         print('progressbar widget complete')
 
     def setValue(self, valueList):
-        for i in range(len(valueList)):
-            self.valLabels[i].setText(valueList[i])
+        print('qwerty!!!!!', valueList)
+        for i in range(numDevices[0]):
+            print(i)
+            self.valLabels[0 * (i * 8)].setText(valueList[0 * (i * 8)])
+            self.valLabels[1 * (i * 8)].setText(valueList[0 * (i * 8)])
+            self.valLabels[2 * (i * 8)].setText(valueList[0 * (i * 8)])
+            self.valLabels[3 * (i * 8)].setText(valueList[0 * (i * 8)])
+            self.valLabels[4 * (i * 8)].setText(valueList[0 * (i * 8)])
+            self.valLabels[5 * (i * 8)].setText(valueList[0 * (i * 8)])
+            self.valLabels[6 * (i * 8)].setText(valueList[0 * (i * 8)])
+            self.valLabels[7 * (i * 8)].setText(valueList[0 * (i * 8)])
             # value = int(valueList[i])
             # self.progressBar[i].setValue(value)
             # if value <= 150:
@@ -158,31 +152,33 @@ class displayVIWidget(QWidget):
         # self.setWindowIcon(QIcon('daqicon.png'))
         self.resize(1920, 500)
         self.resize(self.rect().width(), self.rect().height())
+        # GroupBox for current data
         self.groupBoxCur = QGroupBox(self)
         self.groupBoxCur.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.groupBoxCur.setTitle("Current")
         self.groupBoxCur.setGeometry(QRect(10, 10, 200, 200))
+        self.labelCur = QLabel(self.groupBoxCur)
+        self.labelCur.setGeometry(QRect(10, 10, 180, 180))
+        self.labelCur.setAlignment(Qt.AlignCenter)
+        # GroupBox for voltage data
         self.groupBoxVol = QGroupBox(self)
         self.groupBoxVol.setContextMenuPolicy(Qt.DefaultContextMenu)
         self.groupBoxVol.setTitle('Voltage')
         self.groupBoxVol.setGeometry(QRect(220, 10, 200, 200))
-        # print(value)
-        self.labelCur = QLabel(self.groupBoxCur)
-        self.labelCur.setGeometry(QRect(10, 10, 180, 180))
-        # self.labelCur.setText(str(value[0]))
-        self.labelCur.setAlignment(Qt.AlignCenter)
         self.labelVol = QLabel(self.groupBoxVol)
         self.labelVol.setGeometry(QRect(10, 10, 180, 180))
-        # self.labelVol.setText(str(value[1]))
         self.labelVol.setAlignment(Qt.AlignCenter)
+        # Set init values
+        self.labelCur.setText('9.9')
+        self.labelVol.setText('9.9')
 
-    def setValue(self, result):
-        val = result.val
-        print(val)
-        # self.labelCur.setText(str(value[0]))
-        # self.labelVol.setText(str(value[1]))
-        self.labelCur.setText(val[0])
-        self.labelVol.setText(val[1])
+    def setValue(self, val):
+        print('set value in VI', val[0], val[1])
+        self.labelCur.setText(str(value[0]))
+        self.labelVol.setText(str(value[1]))
+        # Not even this works
+        # self.labelCur.setText('1.0')
+        # self.labelVol.setText('2.0')
 
 
 def runGUI(dir):
